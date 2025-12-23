@@ -1,29 +1,56 @@
-# --- Stage ที่ 1: Builder (สร้าง Production Build) ---
+# ==========================================
+# Stage 1: Dependencies
+# ==========================================
+FROM node:22-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# ก๊อป package.json มาลงแค่ dependencies
+COPY package.json package-lock.json* ./
+# ใช้ npm ci แทน npm install (เร็วกว่าและชัวร์กว่า)
+RUN npm ci
+
+# ==========================================
+# Stage 2: Builder
+# ==========================================
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm install
-
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# สร้าง Production Build (ไฟล์จะอยู่ใน .next)
-RUN npm run build 
 
-# --- Stage ที่ 2: Runner (รัน Production Server) ---
-FROM node:22-alpine 
+# ปิด Telemetry ของ Next.js (ไม่ส่งข้อมูลกลับไปหา Vercel)
+ENV NEXT_TELEMETRY_DISABLED 1
+
+# สร้าง Build (จะได้โฟลเดอร์ .next/standalone ออกมา)
+RUN npm run build
+
+# ==========================================
+# Stage 3: Runner (Production)
+# ==========================================
+FROM node:22-alpine AS runner
 WORKDIR /app
 
-# ตั้งค่า Environment สำหรับ Production
 ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+ENV PORT 3000
 
-# กำหนด Port สำหรับ Next.js
+# สร้าง User ใหม่ชื่อ nextjs (เพื่อความปลอดภัย ไม่รันเป็น root)
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# ก๊อปไฟล์ public (รูปภาพ/static files)
+COPY --from=builder /app/public ./public
+
+# ✅ ก๊อปเฉพาะไฟล์ Standalone ที่ Next.js คัดมาให้แล้ว (พระเอกของเรา)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+# ✅ ก๊อปไฟล์ static เพื่อให้เว็บโหลดเร็ว
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# เปลี่ยนไปใช้ User nextjs
+USER nextjs
+
 EXPOSE 3000
 
-# คัดลอกเฉพาะสิ่งที่จำเป็นสำหรับการรัน Production
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-
-# รัน Next.js Production Server
-CMD ["npm", "start"]
+# รันด้วย node server.js (เร็วกว่า npm start)
+CMD ["node", "server.js"]

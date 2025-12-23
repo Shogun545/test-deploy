@@ -1,17 +1,42 @@
-FROM golang:1.24-alpine
+# ==========================================
+# Stage 1: Builder (มีหน้าที่แค่ Compile Code)
+# ==========================================
+FROM golang:1.24-alpine AS builder
+
+# ติดตั้ง git (บางที go mod download ต้องใช้)
+RUN apk add --no-cache git
 
 WORKDIR /app
 
-# ดาวน์โหลด dependencies ก่อน เพื่อใช้ประโยชน์จาก Docker Cache
+# ก๊อป dependencies มาโหลดก่อน (Docker Cache Layer)
 COPY go.mod go.sum ./
 RUN go mod download
 
-# คัดลอกโค้ดและสร้าง Binary
+# ก๊อป Source Code ทั้งหมด
 COPY . .
-RUN go build -o main .
 
-# กำหนด Port
+# Build เป็น Binary ไฟล์เดียว (ปิด CGO เพื่อให้รันใน Alpine ได้ชัวร์ๆ)
+RUN CGO_ENABLED=0 GOOS=linux go build -o main .
+
+# ==========================================
+# Stage 2: Runner (Image จริงที่จะใช้รัน - เล็กจิ๋ว)
+# ==========================================
+FROM alpine:latest
+
+# ติดตั้ง Timezone (ให้เป็นเวลาไทย) และ CA Certs (สำหรับยิง HTTPS)
+RUN apk --no-cache add ca-certificates tzdata
+ENV TZ=Asia/Bangkok
+
+WORKDIR /root/
+
+# ก๊อปไฟล์ exe จาก Stage 1 มาแค่อันเดียว
+COPY --from=builder /app/main .
+
+# สร้างโฟลเดอร์สำหรับเก็บไฟล์อัปโหลด
+RUN mkdir -p uploads
+
+# เปิด Port
 EXPOSE 8080
 
-# สั่งรัน Binary ที่สร้างเสร็จแล้ว
+# สั่งรัน
 CMD ["./main"]
