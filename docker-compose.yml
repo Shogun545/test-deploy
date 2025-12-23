@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine  # ใช้เวอร์ชัน 16 alpine เล็กและเบา
+    container_name: my_postgres_db
+    restart: always
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: engiadvisory
+    ports:
+      - "5435:5432" 
+    volumes:
+      - db_data:/var/lib/postgresql/data # Map โฟลเดอร์เก็บข้อมูลออกมาข้างนอก (กันข้อมูลหาย)
+
+  backend:
+    build: ./backend       
+    container_name: my_go_backend
+    restart: always
+    ports:
+      - "8080:8080"        
+    depends_on:
+      - db                  # รอให้ db รันเสร็จก่อนค่อยรัน backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_HOST: db           
+      DB_PORT: 5432      
+      DB_USER: postgres
+      DB_PASSWORD: 1234
+      DB_NAME: engiadvisory
+
+
+  frontend:
+    build: ./frontend    
+    container_name: my_next_frontend
+    restart: always
+    ports:
+      - "3000:3000"       
+    environment:
+      # บอก Frontend ว่า Backend อยู่ที่ไหน (สำหรับ Server Side)
+      API_URL: http://backend:8080 
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    depends_on:
+      - backend             # รอ backend ขึ้นก่อน
+    volumes:
+      - ./frontend:/app      
+      - /app/node_modules      
+      - /app/.next
+
+volumes:
+  db_data: 

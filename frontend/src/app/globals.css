@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --font-sans: var(--font-kanit);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Kanit', sans-serif !important;
+}
+
+select,
+DatePicker,
+option {
+  font-family: 'Kanit', sans-serif !important;
+}
+.ant-select-selector, 
+.ant-select-item-option-content, 
+.ant-select-selection-search-input { 
+  font-family: 'Kanit', sans-serif !important; 
+}
+
+@layer base {
+  /* ลบพื้น autofill ของ Chrome / Safari */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    @apply bg-transparent text-gray-700;
+    -webkit-box-shadow: 0 0 0px 1000px transparent inset !important;
+    box-shadow: 0 0 0px 1000px transparent inset !important;
+    -webkit-text-fill-color: #111827 !important; /* สี text */
+    transition: background-color 9999s ease-out 0s;
+  }
+
+  /* สำหรับ Firefox */
+  input:autofill {
+    @apply bg-transparent text-gray-700;
+    box-shadow: 0 0 0px 1000px transparent inset !important;
+  }
+}
+

@@ -1,0 +1,29 @@
+# --- Stage ที่ 1: Builder (สร้าง Production Build) ---
+FROM node:22-alpine AS builder
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm install
+
+COPY . .
+# สร้าง Production Build (ไฟล์จะอยู่ใน .next)
+RUN npm run build 
+
+# --- Stage ที่ 2: Runner (รัน Production Server) ---
+FROM node:22-alpine 
+WORKDIR /app
+
+# ตั้งค่า Environment สำหรับ Production
+ENV NODE_ENV production
+
+# กำหนด Port สำหรับ Next.js
+EXPOSE 3000
+
+# คัดลอกเฉพาะสิ่งที่จำเป็นสำหรับการรัน Production
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+# รัน Next.js Production Server
+CMD ["npm", "start"]
