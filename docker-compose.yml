@@ -1,56 +1,64 @@
 version: '3.8'
 
 services:
+  # -----------------------------
+  # 1. Database
+  # -----------------------------
   db:
-    image: postgres:16-alpine  # ใช้เวอร์ชัน 16 alpine เล็กและเบา
-    container_name: my_postgres_db
+    image: postgres:16-alpine
+    container_name: advisor_db
     restart: always
-    env_file:
-      - ./backend/.env
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1234
+      POSTGRES_PASSWORD: "1234" # ใส่ฟันหนูหน่อยกันพลาด
       POSTGRES_DB: engiadvisory
     ports:
-      - "5435:5432" 
+      - "5435:5432" # เครื่องเราเข้าผ่าน 5435
     volumes:
-      - db_data:/var/lib/postgresql/data # Map โฟลเดอร์เก็บข้อมูลออกมาข้างนอก (กันข้อมูลหาย)
+      - db_data:/var/lib/postgresql/data # เซฟข้อมูลถาวร
 
+  # -----------------------------
+  # 2. Backend (Go)
+  # -----------------------------
   backend:
-    build: ./backend       
-    container_name: my_go_backend
+    build: ./backend
+    container_name: advisor_backend
     restart: always
     ports:
-      - "8080:8080"        
+      - "8080:8080"
     depends_on:
-      - db                  # รอให้ db รันเสร็จก่อนค่อยรัน backend
+      - db
     env_file:
       - ./backend/.env
     environment:
-      DB_HOST: db           
-      DB_PORT: 5432      
+      # Override ค่าใน .env เพื่อให้เชื่อมใน Docker ได้
+      DB_HOST: db             # ชื่อ Service ของ Database
+      DB_PORT: 5432           # Port ภายในของ Container DB
       DB_USER: postgres
-      DB_PASSWORD: 1234
+      DB_PASSWORD: "1234"
       DB_NAME: engiadvisory
+      PORT: "8080"            # ให้ Go รันที่ Portนี้
+      # JWT_SECRET: "..."     # ถ้ามีก็ใส่เพิ่มตรงนี้ได้
+    volumes:
+      - ./uploads:/root/uploads # ✅ Map โฟลเดอร์ uploads (ต้องตรงกับ WORKDIR ใน Dockerfile Backend)
 
-
+  # -----------------------------
+  # 3. Frontend (Next.js)
+  # -----------------------------
   frontend:
-    build: ./frontend    
-    container_name: my_next_frontend
+    build:
+      context: ./frontend
+      # ✅ ส่งค่านี้ไปตอน Build Image (สำคัญมากสำหรับ Next.js Standalone)
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:8080" 
+    container_name: advisor_frontend
     restart: always
     ports:
-      - "3000:3000"       
-    environment:
-      # บอก Frontend ว่า Backend อยู่ที่ไหน (สำหรับ Server Side)
-      API_URL: http://backend:8080 
-      WATCHPACK_POLLING: "true"
-      CHOKIDAR_USEPOLLING: "true"
+      - "3000:3000"
     depends_on:
-      - backend             # รอ backend ขึ้นก่อน
-    volumes:
-      - ./frontend:/app      
-      - /app/node_modules      
-      - /app/.next
+      - backend
+    # ❌ ลบ volumes ทิ้ง เพราะเราใช้ Production Build ที่อยู่ใน Image แล้ว
+    # ❌ ลบ environment ที่เกี่ยวกับการ polling (dev mode) ทิ้ง
 
 volumes:
-  db_data: 
+  db_data:
